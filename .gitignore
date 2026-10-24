@@ -1,0 +1,12 @@
+.vs/
+.idea/
+.vscode/
+
+**/bin/
+**/obj/
+artifacts/
+
+*.user
+*.suo
+*.pdb
+*.pcu
