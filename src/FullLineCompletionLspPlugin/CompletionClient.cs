@@ -1,4 +1,5 @@
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text;
 using System;
 using System.Collections.Generic;
@@ -10,6 +11,8 @@ namespace FullLineCompletionLspPlugin
 {
     internal class CompletionClient
     {
+        private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+
         private readonly string baseUrl;
         private readonly HttpClient client;
 
@@ -21,7 +24,7 @@ namespace FullLineCompletionLspPlugin
 
         public async Task<string> GetCompletionAsync(RequestBody requestBody, CancellationToken cancellationToken)
         {
-            string json = JsonConvert.SerializeObject(requestBody);
+            string json = JsonSerializer.Serialize(requestBody);
             // Отправляем асинхронный запрос с поддержкой отмены (если пользователь продолжил печатать)
             using (var content = new StringContent(json, Encoding.UTF8, "application/json"))
             using (var response = await client.PostAsync(baseUrl + "/v1/completions", content, cancellationToken))
@@ -29,8 +32,8 @@ namespace FullLineCompletionLspPlugin
                 if (!response.IsSuccessStatusCode) return string.Empty;
 
                 string responseJson = await response.Content.ReadAsStringAsync();
-                var result = JsonConvert.DeserializeObject<LlamaCompletionResponse>(responseJson);
-                if (result.Choices.Count > 0)
+                var result = JsonSerializer.Deserialize<LlamaCompletionResponse>(responseJson, JsonOptions);
+                if (result != null && result.Choices.Count > 0)
                 {
                     string completedText = result.Choices[0].Text;
                     return completedText;
@@ -43,16 +46,16 @@ namespace FullLineCompletionLspPlugin
 
     internal sealed class LlamaCompletionResponse
     {
-        [JsonProperty("choices")]
-        public List<LlamaChoice> Choices { get; set; }
+        [JsonPropertyName("choices")]
+        public List<LlamaChoice> Choices { get; set; } = new List<LlamaChoice>();
     }
 
     internal sealed class LlamaChoice
     {
-        [JsonProperty("text")]
-        public string Text { get; set; }
+        [JsonPropertyName("text")]
+        public string Text { get; set; } = string.Empty;
 
-        [JsonProperty("finish_reason")]
-        public string FinishReason { get; set; }
+        [JsonPropertyName("finish_reason")]
+        public string FinishReason { get; set; } = string.Empty;
     }
 }

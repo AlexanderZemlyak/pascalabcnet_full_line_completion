@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 using System.Net.Http;
 using System;
 using System.Threading;
@@ -99,25 +99,26 @@ namespace FullLineCompletionLspPlugin
 
     internal sealed class RequestBody
     {
-        [JsonProperty("prompt")]
-        public string Prompt { get; set; }
+        [JsonPropertyName("prompt")]
+        public string Prompt { get; set; } = string.Empty;
 
-        [JsonProperty("max_tokens")]
+        [JsonPropertyName("max_tokens")]
         public int MaxNewTokens { get; set; }
 
-        [JsonProperty("stop")]
-        public string[] StopStrings { get; set; }
+        [JsonPropertyName("stop")]
+        public string[] StopStrings { get; set; } = Array.Empty<string>();
 
-        [JsonProperty("temperature")]
+        [JsonPropertyName("temperature")]
         public float Temperature { get; set; }
 
-        [JsonProperty("min_p")]
+        [JsonPropertyName("min_p")]
         public float MinP { get; set; }
 
-        [JsonProperty("parse_special")]
+        [JsonPropertyName("parse_special")]
         public bool ParseSpecial { get; set; }
 
-        [JsonProperty("logit_bias", NullValueHandling = NullValueHandling.Ignore)]
-        public int[][] LogitBias { get; set; }
+        [JsonPropertyName("logit_bias")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int[][]? LogitBias { get; set; }
     }
 }

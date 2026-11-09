@@ -1,4 +1,5 @@
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text;
 using System;
 using System.Collections.Generic;
@@ -14,6 +15,8 @@ namespace FullLineCompletionLspPlugin
     /// </summary>
     internal sealed class TokenizerClient
     {
+        private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+
         private class LRUCache
         {
             private const int CacheCapacity = 32;
@@ -88,14 +91,14 @@ namespace FullLineCompletionLspPlugin
                 return string.Empty;
 
             var body = new { tokens = ids };
-            string json = JsonConvert.SerializeObject(body);
+            string json = JsonSerializer.Serialize(body);
             using (var content = new StringContent(json, Encoding.UTF8, "application/json"))
             using (var response = await client.PostAsync(baseUrl + "/detokenize", content, ct))
             {
                 if (!response.IsSuccessStatusCode)
                     return null;
                 string responseJson = await response.Content.ReadAsStringAsync();
-                var result = JsonConvert.DeserializeObject<DetokenizeResponse>(responseJson);
+                var result = JsonSerializer.Deserialize<DetokenizeResponse>(responseJson, JsonOptions);
                 return result?.Content;
             }
         }
@@ -105,14 +108,14 @@ namespace FullLineCompletionLspPlugin
             try
             {
                 var body = new { content = text, parse_special = true };
-                string json = JsonConvert.SerializeObject(body);
+                string json = JsonSerializer.Serialize(body);
                 using (var content = new StringContent(json, Encoding.UTF8, "application/json"))
                 using (var response = await client.PostAsync(baseUrl + "/tokenize", content, ct))
                 {
                     if (!response.IsSuccessStatusCode)
                         return null;
                     string responseJson = await response.Content.ReadAsStringAsync();
-                    var result = JsonConvert.DeserializeObject<TokenizeResponse>(responseJson);
+                    var result = JsonSerializer.Deserialize<TokenizeResponse>(responseJson, JsonOptions);
                     return result?.Tokens;
                 }
             }
@@ -128,14 +131,14 @@ namespace FullLineCompletionLspPlugin
 
         private sealed class TokenizeResponse
         {
-            [JsonProperty("tokens")]
-            public int[] Tokens { get; set; }
+            [JsonPropertyName("tokens")]
+            public int[] Tokens { get; set; } = Array.Empty<int>();
         }
 
         private sealed class DetokenizeResponse
         {
-            [JsonProperty("content")]
-            public string Content { get; set; }
+            [JsonPropertyName("content")]
+            public string Content { get; set; } = string.Empty;
         }
     }
 }

@@ -5,7 +5,7 @@ LLM-плагин full-line completion для LSP-сервера PascalABC.NET
 
 - `src/FullLineCompletionLspPlugin` — регистрирует `IInlineCompletionProvider`
   через плагин-механику LSP-сервера. LLM-ядро (FIM-промпт, клиенты llama-server
-  `/v1/completions`, `/tokenize`, `/detokenize`) перенесено сюда из Legacy-плагина.
+  `/v1/completions`, `/tokenize`, `/detokenize`).
 
 Контракты (`IInlineCompletionProvider` из `CodeCompletionContracts` и
 `ILanguageServerPlugin` из `plugins/PascalABCNet.LanguageServer.PluginApi`)
@@ -40,8 +40,7 @@ LLM-плагин full-line completion для LSP-сервера PascalABC.NET
 
 ## Установка LSP-плагина
 
-Скопировать `FullLineCompletionLspPlugin.dll` и `Newtonsoft.Json.dll` в каталог
-плагинов LSP-сервера:
+Скопировать `FullLineCompletionLspPlugin.dll` в каталог плагинов LSP-сервера:
 
 - VS Code: `<расширение>/bin/net10/plugins/` (или передать серверу
   `--plugins-dir <путь>`);
