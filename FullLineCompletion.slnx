@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/FullLineCompletionLspPlugin/FullLineCompletionLspPlugin.csproj" />
+    <Project Path="src/FullLineCompletionSetup/FullLineCompletionSetup.csproj" />
   </Folder>
 </Solution>

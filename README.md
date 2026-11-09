@@ -15,6 +15,29 @@ LLM-плагин full-line completion для LSP-сервера PascalABC.NET
 
     dotnet build src/FullLineCompletionLspPlugin/FullLineCompletionLspPlugin.csproj
 
+## Установка LLM-рантайма (llama.cpp + модель)
+
+`src/FullLineCompletionSetup` — консольный инструмент (.NET 10, без внешних
+зависимостей) для установки рантайма инлайн-дополнений. Он:
+
+- определяет ОС и устройство по приоритету: дискретная GPU → встроенная GPU →
+  CPU (macOS — Metal); для GPU скачивается Vulkan-сборка (подходит и для
+  дискретных, и для встроенных), для NVIDIA есть `--device cuda`, без GPU —
+  CPU-сборка;
+- скачивает последний официальный релиз llama.cpp с GitHub (с учётом их
+  схемы «nightly»-тегов);
+- скачивает модель (`--model-url`, `--model-file` или переменная окружения
+  `PABC_FULLLINE_MODEL_URL`) в папку с llama.cpp;
+- пишет `fullline-setup.json` с путями к `llama-server`, к модели и готовыми
+  аргументами запуска — этот файл читают и VS Code аддон, и legacy IDE.
+
+Команда установки одинакова для обоих хостов:
+
+    dotnet FullLineCompletionSetup.dll --dir <каталог> [--model-url <url>]
+
+Опции: `--device auto|discretegpu|integratedgpu|cpu|vulkan|cuda|metal`,
+`--model-name <имя>`, `--no-model`, `--dry-run`, `--quiet`.
+
 ## Установка LSP-плагина
 
 Скопировать `FullLineCompletionLspPlugin.dll` и `Newtonsoft.Json.dll` в каталог
