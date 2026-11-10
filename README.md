@@ -8,7 +8,7 @@ LLM-плагин full-line completion для LSP-сервера PascalABC.NET
   `/v1/completions`, `/tokenize`, `/detokenize`).
 
 Контракты (`IInlineCompletionProvider` из `CodeCompletionContracts` и
-`ILanguageServerPlugin` из `plugins/PascalABCNet.LanguageServer.PluginApi`)
+`ILanguageServerPlugin` из `LSP_PluginsAPI/PascalABCNet.LanguageServer.PluginApi`)
 берутся ссылками на проекты сабмодуля `pascalabcnet/`
 
 ## Сборка
@@ -46,7 +46,7 @@ LLM-плагин full-line completion для LSP-сервера PascalABC.NET
   `--plugins-dir <путь>`);
 - .NET 10 IDE: `<каталог сервера>/plugins/`.
 
-Сервер загружает сборки `*Plugin.dll` при старте и объявляет
+Сервер загружает сборки `*LspPlugin.dll` при старте и объявляет
 `experimental.inlineCompletionProvider` в initialize. Запросы:
 `textDocument/inlineCompletion` (стандарт LSP 3.18) и `pascalabc/inlineCompletion`
 (зеркало для клиентов без поддержки 3.18).

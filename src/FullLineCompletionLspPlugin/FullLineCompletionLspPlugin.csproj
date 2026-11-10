@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\pascalabcnet\plugins\PascalABCNet.LanguageServer.PluginApi\PascalABCNet.LanguageServer.PluginApi.csproj">
+    <ProjectReference Include="..\..\pascalabcnet\LSP_PluginsAPI\PascalABCNet.LanguageServer.PluginApi\PascalABCNet.LanguageServer.PluginApi.csproj">
       <Private>false</Private>
     </ProjectReference>
     <ProjectReference Include="..\..\pascalabcnet\CodeCompletionContracts\CodeCompletionContracts.csproj">
