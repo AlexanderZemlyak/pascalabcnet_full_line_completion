@@ -198,8 +198,10 @@ static async Task<int> RunAsync(Options options)
         ModelSizeBytes = modelSizeBytes,
         ModelSha256 = modelSha256,
         ServerArgs = modelPath is null
-            ? new[] { "--port", "8080" }
-            : new[] { "--model", Path.GetFullPath(modelPath), "--port", "8080" }
+            ? new[] { "--host", "127.0.0.1", "--port", "8080" }
+            : new[] { "--model", Path.GetFullPath(modelPath), "--host", "127.0.0.1", "--port", "8080",
+                      "--parallel", "1", "--ctx-size", "768", "--threads", "4",
+                      "--threads-batch", "6", "--flash-attn", "on", "-ngl", "99" }
     };
     var configTmpPath = configPath + ".partial";
     await File.WriteAllTextAsync(configTmpPath,

@@ -106,7 +106,7 @@ namespace FullLineCompletionLspPlugin
             KillStaleServer(installDir);
 
             var port = GetFreePort();
-            var arguments = ApplyPort(config.ServerArgs ?? Array.Empty<string>(), port);
+            var arguments = BuildServerArguments(config, port);
             var startInfo = new ProcessStartInfo
             {
                 FileName = config.ServerPath,
@@ -278,6 +278,32 @@ namespace FullLineCompletionLspPlugin
             }
         }
 
+        /// <summary>
+        /// Аргументы llama-server для однострочного дополнения: маленький контекст,
+        /// один слот, фиксированные потоки. Тюнинг принадлежит плагину (обновляется
+        /// вместе с dll), из конфига берутся только пути, порт подставляется
+        /// свободный. -ngl 99 и --flash-attn на CPU-сборках игнорируются или
+        /// отключаются сами — команда работает на любом устройстве.
+        /// </summary>
+        private static string[] BuildServerArguments(SetupConfig config, int port)
+        {
+            if (string.IsNullOrEmpty(config.ModelPath))
+                return ApplyPort(config.ServerArgs ?? Array.Empty<string>(), port);
+
+            return new[]
+            {
+                "--model", config.ModelPath,
+                "--host", "127.0.0.1",
+                "--port", port.ToString(),
+                "--parallel", "1",
+                "--ctx-size", "768",
+                "--threads", "4",
+                "--threads-batch", "6",
+                "--flash-attn", "on",
+                "-ngl", "99"
+            };
+        }
+
         /// <summary>Подменяет --port в аргументах из конфига на свободный порт.</summary>
         private static string[] ApplyPort(IReadOnlyList<string> serverArgs, int port)
         {
@@ -325,6 +351,7 @@ namespace FullLineCompletionLspPlugin
         {
             public string InstallDir { get; set; } = string.Empty;
             public string ServerPath { get; set; } = string.Empty;
+            public string? ModelPath { get; set; }
             public string[]? ServerArgs { get; set; }
         }
     }
