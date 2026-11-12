@@ -8,7 +8,8 @@ namespace FullLineCompletionLspPlugin
 
         public void Initialize(ILanguageServerPluginContext context)
         {
-            context.RegisterInlineCompletionProvider(new FullLineCompletionProvider());
+            var serverManager = LlamaServerManager.StartNew();
+            context.RegisterInlineCompletionProvider(new FullLineCompletionProvider(serverManager));
         }
     }
 }

@@ -11,35 +11,57 @@ namespace FullLineCompletionLspPlugin
     {
         public bool IsEnabled => true;
 
+        private readonly LlamaServerManager serverManager;
         private readonly HttpClient client;
-        private readonly PromptBuilder promptBuilder;
-        private readonly CompletionClient completionClient;
+        private PromptBuilder? promptBuilder;
+        private CompletionClient? completionClient;
+        private string? currentBaseUrl;
 
         private const int MAX_TOKENS_TO_GENERATE = 32;
         private const float TEMPERATURE_PARAM = 0.3f;
         private const float MIN_TOKEN_PROBABILITY_DYN_THRESHOLD = 0.1f;
         private const int SERVER_RESPONSE_AWAIT_TIMEOUT = 5;
 
-        public FullLineCompletionProvider()
+        public FullLineCompletionProvider(LlamaServerManager serverManager)
         {
+            this.serverManager = serverManager;
+
             client = new HttpClient()
             {
                 Timeout = TimeSpan.FromSeconds(SERVER_RESPONSE_AWAIT_TIMEOUT)
             };
+        }
 
-            var baseUrl = Environment.GetEnvironmentVariable("PABC_LLM_URL") ?? "http://localhost:8080";
+        /// <summary>
+        /// Дожидается готовности сервера моделей (см. LlamaServerManager) и
+        /// подключает клиенты к его базовому URL. Пустая строка — сервер
+        /// недоступен, дополнение не предлагаем.
+        /// </summary>
+        private async Task<string> EnsureBaseUrlAsync(CancellationToken cancellationToken)
+        {
+            var baseUrl = await serverManager.Ready.WaitAsync(cancellationToken);
+            if (string.IsNullOrEmpty(baseUrl))
+                return string.Empty;
 
-            completionClient = new CompletionClient(client, baseUrl);
-
-            promptBuilder = new PromptBuilder(client, baseUrl);
+            if (baseUrl != currentBaseUrl)
+            {
+                completionClient = new CompletionClient(client, baseUrl);
+                promptBuilder = new PromptBuilder(client, baseUrl);
+                currentBaseUrl = baseUrl;
+            }
+            return baseUrl;
         }
 
         public async Task<string> GetCompletionAsync(CodeCompletionContext context, CancellationToken cancellationToken)
         {
             try
             {
+                var baseUrl = await EnsureBaseUrlAsync(cancellationToken);
+                if (baseUrl.Length == 0)
+                    return string.Empty;
+
                 // Формируем чистый FIM-промпт
-                var promptData = await promptBuilder.BuildPromptAsync(
+                var promptData = await promptBuilder!.BuildPromptAsync(
                     context.Prefix,
                     context.Suffix,
                     cancellationToken);
@@ -65,7 +87,7 @@ namespace FullLineCompletionLspPlugin
                     ParseSpecial = true
                 };
 
-                var completedCode = await completionClient.GetCompletionAsync(requestBody, cancellationToken);
+                var completedCode = await completionClient!.GetCompletionAsync(requestBody, cancellationToken);
 
                 // Постпроверки дополнения
                 // TODO: доработать

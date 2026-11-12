@@ -1,5 +1,6 @@
 using FullLineCompletionSetup;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 // Устанавливает LLM runtime (llama.cpp) и модель 
@@ -21,6 +22,8 @@ catch (Exception exception)
 
 static async Task<int> RunAsync(Options options)
 {
+    var progress = new ProgressReporter(options.ProgressJson);
+
     var (pickedClass, device) = options.Device switch
     {
         DeviceClass.Auto => DeviceDetection.PickAuto(),
@@ -65,7 +68,9 @@ static async Task<int> RunAsync(Options options)
         if (File.Exists(path)) File.Delete(path);
     }
 
-    await release.DownloadAndExtractAsync(asset, options.InstallDir, options.CancellationToken);
+    progress.Stage("llama", $"Downloading llama.cpp {release.Tag}");
+    await release.DownloadAndExtractAsync(asset, options.InstallDir, options.CancellationToken,
+        (copied, total) => progress.ReportBytes("llama", copied, total));
     if (cudaRuntimeAsset is not null)
         await release.DownloadAndExtractAsync(cudaRuntimeAsset, options.InstallDir, options.CancellationToken);
 
@@ -93,8 +98,11 @@ static async Task<int> RunAsync(Options options)
     }
 
     string? modelPath = null;
-    var modelSource = options.ModelFile ?? options.ModelUrl ??
-        Environment.GetEnvironmentVariable("PABC_FULLLINE_MODEL_URL");
+    long? modelSizeBytes = null;
+    string? modelSha256 = null;
+    var modelUrl = options.ModelUrl ?? Environment.GetEnvironmentVariable("PABC_FULLLINE_MODEL_URL");
+    var modelSource = options.ModelFile ?? modelUrl;
+
     if (options.NoModel)
     {
         if (!options.Quiet) Console.WriteLine("Model download skipped (--no-model).");
@@ -111,14 +119,24 @@ static async Task<int> RunAsync(Options options)
             ? new Uri(modelSource).AbsolutePath
             : modelSource);
         modelPath = Path.Combine(options.InstallDir, modelName);
+        // Недокачанный файл с прошлого запуска не должен выглядеть как готовая модель.
+        var partialPath = modelPath + ".partial";
+        if (File.Exists(partialPath)) File.Delete(partialPath);
+
         if (File.Exists(modelPath))
         {
             Console.WriteLine($"Model already exists: {modelPath}");
+            modelSizeBytes = new FileInfo(modelPath).Length;
+            // Хэш не пересчитываем: он записан при первичной установке и
+            // переносится из прежнего конфига ниже.
         }
         else if (options.ModelFile is not null)
         {
             Console.WriteLine($"Copying model {options.ModelFile} -> {modelPath}");
-            File.Copy(options.ModelFile, modelPath);
+            (modelSizeBytes, modelSha256) = await CopyWithHashAsync(
+                options.ModelFile, partialPath, "model", progress, options.CancellationToken);
+            // Атомарно: битый файл не остаётся по итоговому пути.
+            File.Move(partialPath, modelPath, overwrite: true);
         }
         else
         {
@@ -127,16 +145,45 @@ static async Task<int> RunAsync(Options options)
             using var response = await http.GetAsync(modelSource, HttpCompletionOption.ResponseHeadersRead,
                 options.CancellationToken);
             response.EnsureSuccessStatusCode();
-            await using var source = await response.Content.ReadAsStreamAsync(options.CancellationToken);
-            await using var target = File.Create(modelPath);
-            await source.CopyToAsync(target, options.CancellationToken);
+            var total = response.Content.Headers.ContentLength;
+            await using (var source = await response.Content.ReadAsStreamAsync(options.CancellationToken))
+            await using (var target = File.Create(partialPath))
+            {
+                using var sha = SHA256.Create();
+                var buffer = new byte[1 << 20];
+                long copied = 0;
+                int read;
+                while ((read = await source.ReadAsync(buffer, options.CancellationToken)) > 0)
+                {
+                    await target.WriteAsync(buffer.AsMemory(0, read), options.CancellationToken);
+                    sha.TransformBlock(buffer, 0, read, null, 0);
+                    copied += read;
+                    progress.ReportBytes("model", copied, total);
+                }
+                sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+                modelSizeBytes = copied;
+                modelSha256 = Convert.ToHexString(sha.Hash!).ToLowerInvariant();
+            }
+            File.Move(partialPath, modelPath, overwrite: true);
         }
+    }
+
+    var configPath = Path.Combine(options.InstallDir, "fullline-setup.json");
+    // Поля, которые мы сейчас не вычисляем (например, sha256 уже существующей
+    // модели), переносим из прежнего конфига, чтобы паспорт установки не пустел.
+    var previous = SetupConfig.TryRead(configPath);
+    if (modelSha256 is null && previous?.ModelPath == modelPath)
+    {
+        modelSha256 = previous.ModelSha256;
+        modelUrl ??= previous.ModelUrl;
+        options.ModelRevision ??= previous.ModelRevision;
     }
 
     var config = new SetupConfig
     {
-        SchemaVersion = 1,
+        SchemaVersion = 2,
         CreatedAt = DateTimeOffset.UtcNow,
+        ToolVersion = typeof(Options).Assembly.GetName().Version?.ToString() ?? "1.0.0",
         Os = RuntimeInformation.OSDescription,
         Arch = RuntimeInformation.ProcessArchitecture.ToString(),
         DeviceClass = pickedClass.ToString(),
@@ -146,18 +193,47 @@ static async Task<int> RunAsync(Options options)
         InstallDir = Path.GetFullPath(options.InstallDir),
         ServerPath = Path.GetFullPath(serverPath),
         ModelPath = modelPath is null ? null : Path.GetFullPath(modelPath),
+        ModelUrl = modelUrl,
+        ModelRevision = options.ModelRevision,
+        ModelSizeBytes = modelSizeBytes,
+        ModelSha256 = modelSha256,
         ServerArgs = modelPath is null
             ? new[] { "--port", "8080" }
             : new[] { "--model", Path.GetFullPath(modelPath), "--port", "8080" }
     };
-    var configPath = Path.Combine(options.InstallDir, "fullline-setup.json");
-    await File.WriteAllTextAsync(configPath,
+    var configTmpPath = configPath + ".partial";
+    await File.WriteAllTextAsync(configTmpPath,
         JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true }),
         options.CancellationToken);
+    File.Move(configTmpPath, configPath, overwrite: true);
 
-    Console.WriteLine($"Done. Config written to {configPath}");
-    Console.WriteLine($"Start the server with: \"{config.ServerPath}\" {string.Join(' ', config.ServerArgs)}");
+    progress.Done(configPath);
+    if (!options.Quiet)
+    {
+        Console.WriteLine($"Done. Config written to {configPath}");
+        Console.WriteLine($"Start the server with: \"{config.ServerPath}\" {string.Join(' ', config.ServerArgs)}");
+    }
     return 0;
+}
+
+static async Task<(long Size, string Sha256)> CopyWithHashAsync(string sourcePath, string targetPath,
+    string stage, ProgressReporter progress, CancellationToken cancellationToken)
+{
+    await using var source = File.OpenRead(sourcePath);
+    await using var target = File.Create(targetPath);
+    using var sha = SHA256.Create();
+    var buffer = new byte[1 << 20];
+    long copied = 0;
+    int read;
+    while ((read = await source.ReadAsync(buffer, cancellationToken)) > 0)
+    {
+        await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+        sha.TransformBlock(buffer, 0, read, null, 0);
+        copied += read;
+        progress.ReportBytes(stage, copied, source.Length);
+    }
+    sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+    return (copied, Convert.ToHexString(sha.Hash!).ToLowerInvariant());
 }
 
 static string? FindExecutable(string directory, string name)
@@ -168,6 +244,49 @@ static string? FindExecutable(string directory, string name)
         .FirstOrDefault();
 }
 
+/// <summary>
+/// Машиночитаемый прогресс для хостов: при --progress json пишет
+/// NDJSON-события в stdout, остальной вывод не трогает. Без флага выводит
+/// человекочитаемые строки.
+/// </summary>
+sealed class ProgressReporter
+{
+    private readonly bool json;
+
+    public ProgressReporter(bool json) => this.json = json;
+
+    public void Stage(string stage, string message)
+    {
+        if (json)
+            Write(new Dictionary<string, object?> { ["event"] = "stage", ["stage"] = stage, ["message"] = message });
+        else
+            Console.WriteLine(message);
+    }
+
+    public void ReportBytes(string stage, long received, long? total)
+    {
+        if (json)
+        {
+            Write(new Dictionary<string, object?>
+            {
+                ["event"] = "progress", ["stage"] = stage, ["received"] = received, ["total"] = total
+            });
+            return;
+        }
+        if (total is > 0 && received % (50 << 20) < (1 << 20))
+            Console.WriteLine($"  {received / (1 << 20)} MB / {total / (1 << 20)} MB");
+    }
+
+    public void Done(string configPath)
+    {
+        if (json)
+            Write(new Dictionary<string, object?> { ["event"] = "done", ["config"] = configPath });
+    }
+
+    private static void Write(Dictionary<string, object?> payload) =>
+        Console.WriteLine(JsonSerializer.Serialize(payload));
+}
+
 sealed class Options
 {
     public string InstallDir { get; private set; } = DefaultInstallDir();
@@ -175,9 +294,11 @@ sealed class Options
     public string? ModelUrl { get; private set; }
     public string? ModelFile { get; private set; }
     public string? ModelName { get; private set; }
+    public string? ModelRevision { get; set; }
     public bool NoModel { get; private set; }
     public bool DryRun { get; private set; }
     public bool Quiet { get; private set; }
+    public bool ProgressJson { get; private set; }
     public CancellationToken CancellationToken { get; private set; }
 
     public static Options? Parse(string[] args)
@@ -202,6 +323,9 @@ sealed class Options
                 case "--model-name" when index + 1 < args.Length:
                     options.ModelName = args[++index];
                     break;
+                case "--model-revision" when index + 1 < args.Length:
+                    options.ModelRevision = args[++index];
+                    break;
                 case "--no-model":
                     options.NoModel = true;
                     break;
@@ -210,6 +334,10 @@ sealed class Options
                     break;
                 case "--quiet":
                     options.Quiet = true;
+                    break;
+                case "--progress" when index + 1 < args.Length && args[index + 1] == "json":
+                    index++;
+                    options.ProgressJson = true;
                     break;
                 case "--help" or "-h":
                     PrintHelp();
@@ -242,9 +370,13 @@ sealed class Options
               --model-url <url>   Download the model from this URL into the install directory
               --model-file <path> Copy a local model file into the install directory
               --model-name <name> File name for the downloaded/copied model
+              --model-revision <rev> Model revision (e.g. Hugging Face commit); recorded into
+                                  fullline-setup.json for version checks
               --no-model          Skip the model step
               --dry-run           Only print what would be downloaded
               --quiet             Less output
+              --progress json     Emit NDJSON progress events in stdout for host UIs:
+                                  {"event":"stage"|"progress"|"done", ...}
             """);
     }
 
@@ -260,6 +392,7 @@ sealed class SetupConfig
 {
     public int SchemaVersion { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+    public string? ToolVersion { get; set; }
     public string Os { get; set; } = string.Empty;
     public string Arch { get; set; } = string.Empty;
     public string DeviceClass { get; set; } = string.Empty;
@@ -269,5 +402,23 @@ sealed class SetupConfig
     public string InstallDir { get; set; } = string.Empty;
     public string ServerPath { get; set; } = string.Empty;
     public string? ModelPath { get; set; }
+    public string? ModelUrl { get; set; }
+    public string? ModelRevision { get; set; }
+    public long? ModelSizeBytes { get; set; }
+    public string? ModelSha256 { get; set; }
     public string[] ServerArgs { get; set; } = Array.Empty<string>();
+
+    public static SetupConfig? TryRead(string configPath)
+    {
+        try
+        {
+            if (!File.Exists(configPath))
+                return null;
+            return JsonSerializer.Deserialize<SetupConfig>(File.ReadAllText(configPath));
+        }
+        catch
+        {
+            return null;
+        }
+    }
 }

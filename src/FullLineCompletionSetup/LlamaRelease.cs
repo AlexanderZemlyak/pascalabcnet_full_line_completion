@@ -119,7 +119,9 @@ public sealed class LlamaRelease
         $"https://github.com/ggml-org/llama.cpp/releases/download/{Tag}/{asset}";
 
     /// <summary>Скачивает ассет и распаковывает его в <paramref name="destination"/> (zip или tar.gz).</summary>
-    public async Task DownloadAndExtractAsync(string asset, string destination, CancellationToken cancellationToken)
+    /// <param name="progress">Прогресс скачивания (байт скачано, байт всего) для машинночитаемого вывода хоста.</param>
+    public async Task DownloadAndExtractAsync(string asset, string destination, CancellationToken cancellationToken,
+        Action<long, long?>? progress = null)
     {
         var url = AssetUrl(asset);
         var extension = asset.EndsWith(".tar.gz") ? ".tar.gz" : Path.GetExtension(asset);
@@ -139,7 +141,8 @@ public sealed class LlamaRelease
             {
                 await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
                 copied += read;
-                if (total is > 0 && copied % (50 << 20) < buffer.Length)
+                progress?.Invoke(copied, total);
+                if (progress is null && total is > 0 && copied % (50 << 20) < buffer.Length)
                     Console.WriteLine($"  {copied / (1 << 20)} MB / {total / (1 << 20)} MB");
             }
         }
