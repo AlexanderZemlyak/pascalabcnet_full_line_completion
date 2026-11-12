@@ -23,7 +23,7 @@ namespace FullLineCompletionLspPlugin
             private readonly Dictionary<(int, string), int[]> cache = new Dictionary<(int, string), int[]>();
             private readonly LinkedList<string> lru = new LinkedList<string>();
 
-            public bool TryGetValue(string key, out int[] value)
+            public bool TryGetValue(string key, out int[]? value)
             {
                 if (cache.TryGetValue((key.Length, key), out var cached))
                 {
@@ -44,7 +44,7 @@ namespace FullLineCompletionLspPlugin
                     lru.AddFirst(key);
                     if (lru.Count > CacheCapacity)
                     {
-                        var last = lru.Last.Value;
+                        var last = lru.Last!.Value;
                         lru.RemoveLast();
                         cache.Remove((last.Length, last));
                     }
@@ -66,7 +66,7 @@ namespace FullLineCompletionLspPlugin
         /// <summary>
         /// Возвращает массив id токенов. При ошибке возвращает null
         /// </summary>
-        public async Task<int[]> EncodeAsync(string text, CancellationToken ct)
+        public async Task<int[]?> EncodeAsync(string text, CancellationToken ct)
         {
             if (string.IsNullOrEmpty(text))
                 return Array.Empty<int>();
@@ -85,7 +85,7 @@ namespace FullLineCompletionLspPlugin
         /// <summary>
         /// Декодирует id обратно в строку. При ошибке возвращает null.
         /// </summary>
-        public async Task<string> DecodeAsync(int[] ids, CancellationToken ct)
+        public async Task<string?> DecodeAsync(int[] ids, CancellationToken ct)
         {
             if (ids == null || ids.Length == 0)
                 return string.Empty;
@@ -103,7 +103,7 @@ namespace FullLineCompletionLspPlugin
             }
         }
 
-        private async Task<int[]> EncodeRemoteAsync(string text, CancellationToken ct)
+        private async Task<int[]?> EncodeRemoteAsync(string text, CancellationToken ct)
         {
             try
             {

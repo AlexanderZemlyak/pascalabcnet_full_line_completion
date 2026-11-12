@@ -172,7 +172,7 @@ static async Task<int> RunAsync(Options options)
     // Поля, которые мы сейчас не вычисляем (например, sha256 уже существующей
     // модели), переносим из прежнего конфига, чтобы паспорт установки не пустел.
     var previous = SetupConfig.TryRead(configPath);
-    if (modelSha256 is null && previous?.ModelPath == modelPath)
+    if (modelSha256 is null && previous is not null && previous.ModelPath == modelPath)
     {
         modelSha256 = previous.ModelSha256;
         modelUrl ??= previous.ModelUrl;

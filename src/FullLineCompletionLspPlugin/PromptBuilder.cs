@@ -39,7 +39,7 @@ namespace FullLineCompletionLspPlugin
             this.tokenizerClient = new TokenizerClient(client, baseUrl);
         }
 
-        public async Task<PromptData> BuildPromptAsync(string prefixText, string suffixText, CancellationToken cancellationToken)
+        public async Task<PromptData?> BuildPromptAsync(string prefixText, string suffixText, CancellationToken cancellationToken)
         {
             // Чистим лишние пробельные символы
             string prefix = CleanLines(prefixText.TrimStart(), preserveLastLine: true);
@@ -96,14 +96,14 @@ namespace FullLineCompletionLspPlugin
             {
                 int prefStart = Math.Max(0, prefIds.Length - prefBudget);
                 var prefSlice = Slice(prefIds, prefStart, prefIds.Length);
-                cutPrefix = await tokenizerClient.DecodeAsync(prefSlice, ct);
+                cutPrefix = await tokenizerClient.DecodeAsync(prefSlice, ct) ?? prefix;
             }
             // Суффикс оставляем с начала
             if (suffIds.Length > 0)
             {
                 int suffEnd = Math.Min(suffIds.Length, suffBudget);
                 var suffSlice = Slice(suffIds, 0, suffEnd);
-                cutSuffix = await tokenizerClient.DecodeAsync(suffSlice, ct);
+                cutSuffix = await tokenizerClient.DecodeAsync(suffSlice, ct) ?? suffix;
             }
 
             return (cutPrefix, cutSuffix);

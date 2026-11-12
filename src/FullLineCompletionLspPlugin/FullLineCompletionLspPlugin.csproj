@@ -11,9 +11,13 @@
   <ItemGroup>
     <ProjectReference Include="..\..\pascalabcnet\LSP_PluginsAPI\PascalABCNet.LanguageServer.PluginApi\PascalABCNet.LanguageServer.PluginApi.csproj">
       <Private>false</Private>
+      <SetTargetFramework>TargetFramework=net10.0</SetTargetFramework>
+      <AdditionalProperties>PABCNET_LEGACY_ONLY=false;WarningLevel=0</AdditionalProperties>
     </ProjectReference>
     <ProjectReference Include="..\..\pascalabcnet\CodeCompletionContracts\CodeCompletionContracts.csproj">
       <Private>false</Private>
+      <SetTargetFramework>TargetFramework=net10.0</SetTargetFramework>
+      <AdditionalProperties>PABCNET_LEGACY_ONLY=false;WarningLevel=0</AdditionalProperties>
     </ProjectReference>
   </ItemGroup>
 </Project>
