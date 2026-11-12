@@ -322,6 +322,12 @@ namespace FullLineCompletionLspPlugin
         private static string Quote(string argument) =>
             argument.Any(char.IsWhiteSpace) ? $"\"{argument}\"" : argument;
 
+        // Полный вывод llama-server — только по PABC_LLM_LOG=1: по умолчанию он
+        // лишь спамит в канал вывода хоста. Мимо фильтра проходят строки с
+        // ошибками — иначе причина отказа llama (битая модель и т.п.) теряется.
+        private static readonly bool VerboseLlamaLog =
+            Environment.GetEnvironmentVariable("PABC_LLM_LOG") is "1" or "true";
+
         private static void DrainToConsole(StreamReader reader)
         {
             _ = Task.Run(async () =>
@@ -330,7 +336,13 @@ namespace FullLineCompletionLspPlugin
                 {
                     string? line;
                     while ((line = await reader.ReadLineAsync()) is not null)
-                        Console.Error.WriteLine($"[llama] {line}");
+                    {
+                        if (VerboseLlamaLog)
+                            Console.Error.WriteLine($"[llama] {line}");
+                        else if (line.Contains("error", StringComparison.OrdinalIgnoreCase) ||
+                                 line.Contains("fail", StringComparison.OrdinalIgnoreCase))
+                            Console.Error.WriteLine($"[llama] {line}");
+                    }
                 }
                 catch
                 {
