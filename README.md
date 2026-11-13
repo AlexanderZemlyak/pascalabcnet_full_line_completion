@@ -3,6 +3,8 @@
 LLM-плагин full-line completion для LSP-сервера PascalABC.NET
 (PascalABCNet.LanguageServer), только .NET 10:
 
+> Архитектура, политика обновлений и удаления: [docs/design-fullline-completion.md](docs/design-fullline-completion.md).
+
 - `src/FullLineCompletionLspPlugin` — регистрирует `IInlineCompletionProvider`
   через плагин-механику LSP-сервера. LLM-ядро (FIM-промпт, клиенты llama-server
   `/v1/completions`, `/tokenize`, `/detokenize`).
