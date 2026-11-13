@@ -18,7 +18,7 @@ namespace FullLineCompletionLspPlugin
         private string? currentBaseUrl;
 
         private const int MAX_TOKENS_TO_GENERATE = 32;
-        private const float TEMPERATURE_PARAM = 0.3f;
+        private const float TEMPERATURE_PARAM = 0.0f;
         private const float MIN_TOKEN_PROBABILITY_DYN_THRESHOLD = 0.1f;
         private const int SERVER_RESPONSE_AWAIT_TIMEOUT = 5;
 
@@ -88,21 +88,6 @@ namespace FullLineCompletionLspPlugin
                 };
 
                 var completedCode = await completionClient!.GetCompletionAsync(requestBody, cancellationToken);
-
-                // Постпроверки дополнения
-                // TODO: доработать
-                var trimmedPrefix = promptData.Prefix.TrimEnd();
-                var indexOfLastPrefixLine = trimmedPrefix.LastIndexOf('\n') + 1;
-                var trimmedSuffix = promptData.Suffix.TrimStart();
-                var indexOfFirstSuffixLine = trimmedSuffix.IndexOf('\n') + 1;
-
-                var completedLine = completedCode;
-
-                if (completedLine == trimmedPrefix.Substring(indexOfLastPrefixLine, trimmedPrefix.Length - indexOfLastPrefixLine).Trim() ||
-                    completedLine == trimmedSuffix.Substring(0, indexOfFirstSuffixLine).Trim())
-                {
-                    return string.Empty;
-                }
 
                 return completedCode;
             }
