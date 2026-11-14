@@ -42,11 +42,8 @@ LLM-плагин full-line completion для LSP-сервера PascalABC.NET
 
 ## Установка LSP-плагина
 
-Скопировать `FullLineCompletionLspPlugin.dll` в каталог плагинов LSP-сервера:
-
-- VS Code: `<расширение>/bin/net10/plugins/` (или передать серверу
-  `--plugins-dir <путь>`);
-- .NET 10 IDE: `<каталог сервера>/plugins/`.
+Скопировать `FullLineCompletionLspPlugin.dll` в каталог плагинов LSP-сервера
+(каталог передается серверу аргументом --plugins-dir на старте)
 
 Сервер загружает сборки `*LspPlugin.dll` при старте и объявляет
 `experimental.inlineCompletionProvider` в initialize. Запросы:
